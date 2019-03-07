@@ -63,6 +63,7 @@ open class DefaultFetchNotificationManager(context: Context) : FetchNotification
                 .setContentTitle(context.getString(R.string.fetch_notification_default_channel_name))
                 .setContentText("")
                 .setStyle(style)
+                .setOnlyAlertOnce(true)
                 .setGroup(groupId.toString())
                 .setGroupSummary(true)
         return false
@@ -77,6 +78,7 @@ open class DefaultFetchNotificationManager(context: Context) : FetchNotification
             android.R.drawable.stat_sys_download_done
         }
         notificationBuilder.setPriority(NotificationCompat.PRIORITY_DEFAULT)
+                .setOnlyAlertOnce(true)
                 .setSmallIcon(smallIcon)
                 .setContentTitle(getContentTitle(downloadNotification))
                 .setContentText(getContentText(context, downloadNotification))
@@ -246,6 +248,7 @@ open class DefaultFetchNotificationManager(context: Context) : FetchNotification
                     .setContentText(null)
                     .setContentIntent(null)
                     .setGroupSummary(false)
+                    .setOnlyAlertOnce(true)
                     .setOngoing(false)
                     .setGroup(groupId.toString())
                     .setSmallIcon(android.R.drawable.stat_sys_download_done)
