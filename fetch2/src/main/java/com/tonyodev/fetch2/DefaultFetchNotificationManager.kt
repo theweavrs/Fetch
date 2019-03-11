@@ -58,7 +58,7 @@ open class DefaultFetchNotificationManager(context: Context) : FetchNotification
             val contentTitle = getContentText(context, downloadNotification)
             style.addLine("$title $contentTitle")
         }
-        notificationBuilder.setPriority(NotificationCompat.PRIORITY_DEFAULT)
+        notificationBuilder.setPriority(NotificationCompat.PRIORITY_LOW)
                 .setSmallIcon(android.R.drawable.stat_sys_download_done)
                 .setContentTitle(context.getString(R.string.fetch_notification_default_channel_name))
                 .setContentText("")
@@ -77,7 +77,7 @@ open class DefaultFetchNotificationManager(context: Context) : FetchNotification
         } else {
             android.R.drawable.stat_sys_download_done
         }
-        notificationBuilder.setPriority(NotificationCompat.PRIORITY_DEFAULT)
+        notificationBuilder.setPriority(NotificationCompat.PRIORITY_LOW)
                 .setOnlyAlertOnce(true)
                 .setSmallIcon(smallIcon)
                 .setContentTitle(getContentTitle(downloadNotification))
@@ -241,6 +241,7 @@ open class DefaultFetchNotificationManager(context: Context) : FetchNotification
                     ?: NotificationCompat.Builder(context, getChannelId(notificationId, context))
             downloadNotificationsBuilderMap[notificationId] = notificationBuilder
             notificationBuilder
+                    .setPriority(NotificationCompat.PRIORITY_LOW)
                     .setGroup(notificationId.toString())
                     .setStyle(null)
                     .setProgress(0, 0, false)
