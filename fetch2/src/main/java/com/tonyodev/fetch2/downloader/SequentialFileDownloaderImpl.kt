@@ -17,7 +17,8 @@ class SequentialFileDownloaderImpl(private val initialDownload: Download,
                                    private val networkInfoProvider: NetworkInfoProvider,
                                    private val retryOnNetworkGain: Boolean,
                                    private val hashCheckingEnabled: Boolean,
-                                   private val storageResolver: StorageResolver) : FileDownloader {
+                                   private val storageResolver: StorageResolver,
+                                   private val preAllocateFileOnCreation: Boolean) : FileDownloader {
 
     @Volatile
     override var interrupted = false
@@ -99,6 +100,12 @@ class SequentialFileDownloaderImpl(private val initialDownload: Download,
                     }
                     downloadInfo.downloaded = downloaded
                     downloadInfo.total = total
+                    if (!storageResolver.fileExists(request.file)) {
+                        storageResolver.createFile(request.file, initialDownload.enqueueAction == EnqueueAction.INCREMENT_FILE_NAME)
+                    }
+                    if (preAllocateFileOnCreation) {
+                        storageResolver.preAllocateFile(request.file, downloadInfo.total)
+                    }
                     outputResourceWrapper = storageResolver.getRequestOutputResourceWrapper(request)
                     outputResourceWrapper.setWriteOffset(seekPosition)
                     if (!interrupted && !terminated) {
@@ -333,7 +340,10 @@ class SequentialFileDownloaderImpl(private val initialDownload: Download,
                 tag = initialDownload.tag,
                 identifier = initialDownload.identifier,
                 requestMethod = GET_REQUEST_METHOD,
-                extras = initialDownload.extras)
+                extras = initialDownload.extras,
+                redirected = false,
+                redirectUrl = "",
+                segment = 1)
     }
 
     private fun getAverageDownloadedBytesPerSecond(): Long {

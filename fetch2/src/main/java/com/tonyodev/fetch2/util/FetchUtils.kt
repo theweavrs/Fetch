@@ -55,7 +55,8 @@ fun getRequestForDownload(download: Download, requestMethod: String = GET_REQUES
 fun getRequestForDownload(download: Download,
                           rangeStart: Long = -1,
                           rangeEnd: Long = -1,
-                          requestMethod: String = GET_REQUEST_METHOD): Downloader.ServerRequest {
+                          requestMethod: String = GET_REQUEST_METHOD,
+                          segment: Int = 1): Downloader.ServerRequest {
     val start = if (rangeStart == -1L) 0 else rangeStart
     val end = if (rangeEnd == -1L) "" else rangeEnd.toString()
     val headers = download.headers.toMutableMap()
@@ -69,7 +70,10 @@ fun getRequestForDownload(download: Download,
             tag = download.tag,
             identifier = download.identifier,
             requestMethod = requestMethod,
-            extras = download.extras)
+            extras = download.extras,
+            redirected = false,
+            redirectUrl = "",
+            segment = segment)
 }
 
 fun getServerRequestFromRequest(request: Request): Downloader.ServerRequest {
@@ -82,7 +86,10 @@ fun getServerRequestFromRequest(request: Request): Downloader.ServerRequest {
             requestMethod = GET_REQUEST_METHOD,
             file = request.file,
             fileUri = getFileUri(request.file),
-            extras = request.extras)
+            extras = request.extras,
+            redirected = false,
+            redirectUrl = "",
+            segment = 1)
 }
 
 fun getCatalogServerRequestFromRequest(request: Request): Downloader.ServerRequest {
@@ -100,7 +107,10 @@ fun getCatalogServerRequestFromRequest(request: Request): Downloader.ServerReque
             requestMethod = GET_REQUEST_METHOD,
             file = request.file,
             fileUri = getFileUri(request.file),
-            extras = request.extras)
+            extras = request.extras,
+            redirected = false,
+            redirectUrl = "",
+            segment = 1)
 }
 
 fun getPreviousSliceCount(id: Int, fileTempDir: String): Int {

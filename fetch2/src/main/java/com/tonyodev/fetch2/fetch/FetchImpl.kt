@@ -6,13 +6,14 @@ import com.tonyodev.fetch2.*
 import com.tonyodev.fetch2.exception.FetchException
 import com.tonyodev.fetch2.getErrorFromMessage
 import com.tonyodev.fetch2.fetch.FetchModulesBuilder.Modules
+import com.tonyodev.fetch2.util.ActiveDownloadInfo
 import com.tonyodev.fetch2.util.DEFAULT_ENABLE_LISTENER_AUTOSTART_ON_ATTACHED
 import com.tonyodev.fetch2.util.DEFAULT_ENABLE_LISTENER_NOTIFY_ON_ATTACHED
 import com.tonyodev.fetch2.util.toDownloadInfo
 import com.tonyodev.fetch2core.*
 
 open class FetchImpl constructor(override val namespace: String,
-                                 override val fetchConfiguration: FetchConfiguration,
+                                 final override val fetchConfiguration: FetchConfiguration,
                                  private val handlerWrapper: HandlerWrapper,
                                  private val uiHandler: Handler,
                                  private val fetchHandler: FetchHandler,
@@ -28,20 +29,38 @@ open class FetchImpl constructor(override val namespace: String,
                 return closed
             }
         }
-
-    override val hasActiveDownloads: Boolean
-        get() {
-            return try {
-                fetchHandler.hasActiveDownloads(false)
-            } catch (e: Exception) {
-                false
+    private val activeDownloadsSet = mutableSetOf<ActiveDownloadInfo>()
+    private val activeDownloadsRunnable = Runnable {
+        if (!isClosed) {
+            val hasActiveDownloadsAdded = fetchHandler.hasActiveDownloads(true)
+            val hasActiveDownloads = fetchHandler.hasActiveDownloads(false)
+            uiHandler.post {
+                if (!isClosed) {
+                    val iterator = activeDownloadsSet.iterator()
+                    var activeDownloadInfo: ActiveDownloadInfo
+                    var hasActive: Boolean
+                    while (iterator.hasNext()) {
+                        activeDownloadInfo = iterator.next()
+                        hasActive = if (activeDownloadInfo.includeAddedDownloads) hasActiveDownloadsAdded else hasActiveDownloads
+                        activeDownloadInfo.fetchObserver.onChanged(hasActive, Reason.REPORTING)
+                    }
+                }
+                if (!isClosed) {
+                    registerActiveDownloadsRunnable()
+                }
             }
         }
+    }
 
     init {
         handlerWrapper.post {
             fetchHandler.init()
         }
+        registerActiveDownloadsRunnable()
+    }
+
+    private fun registerActiveDownloadsRunnable() {
+        handlerWrapper.postDelayed(activeDownloadsRunnable, fetchConfiguration.activeDownloadsCheckInterval)
     }
 
     override fun enqueue(request: Request, func: Func<Request>?, func2: Func<Error>?): Fetch {
@@ -189,6 +208,26 @@ open class FetchImpl constructor(override val namespace: String,
         return pauseGroup(id, null, null)
     }
 
+    override fun pauseAll(): Fetch {
+        synchronized(lock) {
+            throwExceptionIfClosed()
+            handlerWrapper.post {
+                try {
+                    val downloads = fetchHandler.pauseAll()
+                    downloads.forEach {
+                        logger.d("Paused download $it")
+                        listenerCoordinator.mainListener.onPaused(it)
+                    }
+                } catch (e: Exception) {
+                    logger.e("Fetch with namespace $namespace error", e)
+                    val error = getErrorFromMessage(e.message)
+                    error.throwable = e
+                }
+            }
+        }
+        return this
+    }
+
     override fun freeze(func: Func<Boolean>?, func2: Func<Error>?): Fetch {
         return synchronized(lock) {
             throwExceptionIfClosed()
@@ -316,6 +355,28 @@ open class FetchImpl constructor(override val namespace: String,
                 }
             }
         }
+    }
+
+    override fun resumeAll(): Fetch {
+        synchronized(lock) {
+            throwExceptionIfClosed()
+            handlerWrapper.post {
+                try {
+                    val downloads = fetchHandler.resumeAll()
+                    downloads.forEach {
+                        logger.d("Queued download $it")
+                        listenerCoordinator.mainListener.onQueued(it, false)
+                        logger.d("Resumed download $it")
+                        listenerCoordinator.mainListener.onResumed(it)
+                    }
+                } catch (e: Exception) {
+                    logger.e("Fetch with namespace $namespace error", e)
+                    val error = getErrorFromMessage(e.message)
+                    error.throwable = e
+                }
+            }
+        }
+        return this
     }
 
     override fun remove(ids: List<Int>, func: Func<List<Download>>?, func2: Func<Error>?): Fetch {
@@ -576,6 +637,34 @@ open class FetchImpl constructor(override val namespace: String,
         }
     }
 
+    override fun resetAutoRetryAttempts(downloadId: Int, retryDownload: Boolean, func: Func2<Download?>?, func2: Func<Error>?): Fetch {
+        return synchronized(lock) {
+            throwExceptionIfClosed()
+            handlerWrapper.post {
+                try {
+                    val download = fetchHandler.resetAutoRetryAttempts(downloadId, retryDownload)
+                    if (download != null && download.status == Status.QUEUED) {
+                        logger.d("Queued $download for download")
+                        listenerCoordinator.mainListener.onQueued(download, false)
+                    }
+                    uiHandler.post {
+                        func?.call(download)
+                    }
+                } catch (e: Exception) {
+                    logger.e("Fetch with namespace $namespace error", e)
+                    val error = getErrorFromMessage(e.message)
+                    error.throwable = e
+                    if (func2 != null) {
+                        uiHandler.post {
+                            func2.call(error)
+                        }
+                    }
+                }
+            }
+            this
+        }
+    }
+
     override fun retry(ids: List<Int>): Fetch {
         return retry(ids, null, null)
     }
@@ -802,6 +891,19 @@ open class FetchImpl constructor(override val namespace: String,
         }
     }
 
+    override fun getDownloadsWithStatus(statuses: List<Status>, func: Func<List<Download>>): Fetch {
+        synchronized(lock) {
+            throwExceptionIfClosed()
+            handlerWrapper.post {
+                val downloads = fetchHandler.getDownloadsWithStatus(statuses)
+                uiHandler.post {
+                    func.call(downloads)
+                }
+            }
+            return this
+        }
+    }
+
     override fun addCompletedDownload(completedDownload: CompletedDownload, alertListeners: Boolean, func: Func<Download>?, func2: Func<Error>?): Fetch {
         return addCompletedDownloads(listOf(completedDownload), alertListeners, Func { downloads ->
             if (downloads.isNotEmpty()) {
@@ -961,6 +1063,34 @@ open class FetchImpl constructor(override val namespace: String,
         }
     }
 
+    override fun getContentLengthForRequests(requests: List<Request>, fromServer: Boolean, func: Func<List<Pair<Request, Long>>>, func2: Func<List<Pair<Request, Error>>>): Fetch {
+        synchronized(lock) {
+            throwExceptionIfClosed()
+            handlerWrapper.executeWorkerTask {
+                val results = mutableListOf<Pair<Request, Long>>()
+                val results2 = mutableListOf<Pair<Request, Error>>()
+                for (request in requests) {
+                    try {
+                        results.add(Pair(request, fetchHandler.getContentLengthForRequest(request, fromServer)))
+                    } catch (e: Exception) {
+                        logger.e("Fetch with namespace $namespace error", e)
+                        val error = getErrorFromMessage(e.message)
+                        error.throwable = e
+                        results2.add(Pair(request, error))
+                    }
+                }
+                uiHandler.post {
+                    func.call(results)
+                }
+                uiHandler.post {
+                    func2.call(results2)
+                }
+            }
+            return this
+        }
+    }
+
+
     override fun getServerResponse(url: String,
                                    headers: Map<String, String>?,
                                    func: Func<Downloader.Response>,
@@ -1052,6 +1182,7 @@ open class FetchImpl constructor(override val namespace: String,
             }
             closed = true
             logger.d("$namespace closing/shutting down")
+            handlerWrapper.removeCallbacks(activeDownloadsRunnable)
             handlerWrapper.post {
                 try {
                     fetchHandler.close()
@@ -1075,6 +1206,34 @@ open class FetchImpl constructor(override val namespace: String,
 
     override fun awaitFinish() {
         awaitFinishOrTimeout(-1)
+    }
+
+    override fun addActiveDownloadsObserver(includeAddedDownloads: Boolean, fetchObserver: FetchObserver<Boolean>): Fetch {
+        synchronized(lock) {
+            throwExceptionIfClosed()
+            handlerWrapper.post {
+                activeDownloadsSet.add(ActiveDownloadInfo(fetchObserver, includeAddedDownloads))
+            }
+            return this
+        }
+    }
+
+    override fun removeActiveDownloadsObserver(fetchObserver: FetchObserver<Boolean>): Fetch {
+        synchronized(lock) {
+            throwExceptionIfClosed()
+            handlerWrapper.post {
+                val iterator = activeDownloadsSet.iterator()
+                while (iterator.hasNext()) {
+                    val activeDownloadInfo = iterator.next()
+                    if (activeDownloadInfo.fetchObserver == fetchObserver) {
+                        iterator.remove()
+                        logger.d("Removed ActiveDownload FetchObserver $fetchObserver")
+                        break
+                    }
+                }
+            }
+            return this
+        }
     }
 
     companion object {

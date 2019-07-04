@@ -166,7 +166,19 @@ interface Downloader<T, R> : Closeable {
             val requestMethod: String,
 
             /** The extras associated with this request*/
-            val extras: Extras)
+            val extras: Extras,
+
+            /** If the original url was redirected.*/
+            val redirected: Boolean,
+
+            /** redirect url*/
+            val redirectUrl: String,
+            
+            /**
+             * If the request will be downloaded using the parallel download and the file slice count is greater the 1. This field will indicate
+             * the request segment/part.
+             * */
+            val segment: Int)
 
     /**
      * A class that contains the server response information used by Fetch

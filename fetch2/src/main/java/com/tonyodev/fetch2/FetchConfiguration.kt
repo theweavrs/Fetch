@@ -28,7 +28,13 @@ class FetchConfiguration private constructor(val appContext: Context,
                                              val storageResolver: StorageResolver,
                                              val fetchNotificationManager: FetchNotificationManager?,
                                              val fetchDatabaseManager: FetchDatabaseManager?,
-                                             val backgroundHandler: Handler?) {
+                                             val backgroundHandler: Handler?,
+                                             val prioritySort: PrioritySort,
+                                             val internetCheckUrl: String?,
+                                             val activeDownloadsCheckInterval: Long,
+                                             val createFileOnEnqueue: Boolean,
+                                             val maxAutoRetryAttempts: Int,
+                                             val preAllocateFileOnCreation: Boolean) {
 
     /* Creates a new Instance of Fetch with this object's configuration settings. Convenience method
     * for Fetch.Impl.getInstance(fetchConfiguration)
@@ -48,7 +54,7 @@ class FetchConfiguration private constructor(val appContext: Context,
         private var loggingEnabled = DEFAULT_LOGGING_ENABLED
         private var httpDownloader = defaultDownloader
         private var globalNetworkType = defaultGlobalNetworkType
-        private var logger: Logger = FetchLogger(DEFAULT_LOGGING_ENABLED, DEFAULT_TAG)
+        private var logger: Logger = defaultLogger
         private var autoStart = DEFAULT_AUTO_START
         private var retryOnNetworkGain = DEFAULT_RETRY_ON_NETWORK_GAIN
         private var fileServerDownloader: FileServerDownloader = defaultFileServerDownloader
@@ -58,6 +64,12 @@ class FetchConfiguration private constructor(val appContext: Context,
         private var fetchNotificationManager: FetchNotificationManager? = null
         private var fetchDatabaseManager: FetchDatabaseManager? = null
         private var backgroundHandler: Handler? = null
+        private var prioritySort: PrioritySort = defaultPrioritySort
+        private var internetCheckUrl: String? = null
+        private var activeDownloadCheckInterval = DEFAULT_HAS_ACTIVE_DOWNLOADS_INTERVAL_IN_MILLISECONDS
+        private var createFileOnEnqueue = DEFAULT_CREATE_FILE_ON_ENQUEUE
+        private var maxAutoRetryAttempts = DEFAULT_GLOBAL_AUTO_RETRY_ATTEMPTS
+        private var preAllocateFileOnCreation = DEFAULT_PREALLOCATE_FILE_ON_CREATE
 
         /** Sets the namespace which Fetch operates in. Fetch uses
          * a namespace to create a database that the instance will use. Downloads
@@ -265,6 +277,79 @@ class FetchConfiguration private constructor(val appContext: Context,
         }
 
         /**
+         * Used to dictate the order in which Fetch processes request/downloads
+         * based on time created. Default is PrioritySort.ASC
+         * @param prioritySort the priority sort.
+         * */
+        fun setPrioritySort(prioritySort: PrioritySort): Builder {
+            this.prioritySort = prioritySort
+            return this
+        }
+
+        /**
+         * If set, Fetch will use this url to check against for internet connection.
+         * rather than using the Android frameworks internet check classes. Note: setting
+         * this will cause Fetch to always make a network request to the url.
+         * This will cause a small delay before downloading a request. Only set this option if
+         * necessary.
+         * @param url the url to check against.
+         * */
+        fun setInternetAccessUrlCheck(url: String?): Builder {
+            internetCheckUrl = url
+            return this
+        }
+
+        /**
+         * Sets the HasActiveDownloads reporting interval in milliseconds for instances of Fetch
+         * created with this FetchConfiguration. This controls how often HasActiveDownloads is reported
+         * when a FetchObserver is attached to Fetch to monitor hasActiveDownloads.
+         * The default value is 5 minutes.
+         * This method can only accept values greater than 0.
+         * @param intervalInMillis reporting interval in milliseconds
+         * @throws FetchException if the passed in progress reporting interval is less than 0.
+         * @return Builder
+         * */
+        fun setHasActiveDownloadsCheckInterval(intervalInMillis: Long): Builder {
+            if (intervalInMillis < 0) {
+                throw FetchException("intervalInMillis cannot be less than 0")
+            }
+            this.activeDownloadCheckInterval = intervalInMillis
+            return this
+        }
+
+        /**
+         * Enable or disable creating the download file on enqueue
+         * @param create true or false. The default is true
+         * @return Builder
+         * */
+        fun createDownloadFileOnEnqueue(create: Boolean): Builder {
+            this.createFileOnEnqueue = create
+            return this
+        }
+        /**
+         * The Global maximum number of times Fetch will auto retry a failed download. If set,
+         * the autoRetryMaxAttempts on the individual download is overridden.
+         * @throws IllegalArgumentException if value passed in is less than 0
+         * */
+        fun setAutoRetryMaxAttempts(autoRetryMaxAttempts: Int): Builder {
+            if (autoRetryMaxAttempts < 0) {
+                throw IllegalArgumentException("The AutoRetryMaxAttempts has to be greater than -1")
+            }
+            this.maxAutoRetryAttempts = autoRetryMaxAttempts
+            return this
+        }
+
+        /**
+         * Preallocate the download file on the local storage when a request is enqueued.
+         * @param preAllocateFile true to pre allocate. False otherwise. The default is true.
+         * @return Builder
+         * */
+        fun preAllocateFileOnCreation(preAllocateFile: Boolean): Builder {
+            this.preAllocateFileOnCreation = preAllocateFile
+            return this
+        }
+
+        /**
          * Build FetchConfiguration instance.
          * @return new FetchConfiguration instance.
          * */
@@ -295,7 +380,13 @@ class FetchConfiguration private constructor(val appContext: Context,
                     storageResolver = storageResolver,
                     fetchNotificationManager = fetchNotificationManager,
                     fetchDatabaseManager = fetchDatabaseManager,
-                    backgroundHandler = backgroundHandler)
+                    backgroundHandler = backgroundHandler,
+                    prioritySort = prioritySort,
+                    internetCheckUrl = internetCheckUrl,
+                    activeDownloadsCheckInterval = activeDownloadCheckInterval,
+                    createFileOnEnqueue = createFileOnEnqueue,
+                    maxAutoRetryAttempts = maxAutoRetryAttempts,
+                    preAllocateFileOnCreation = preAllocateFileOnCreation)
         }
 
     }
@@ -321,6 +412,12 @@ class FetchConfiguration private constructor(val appContext: Context,
         if (fetchNotificationManager != other.fetchNotificationManager) return false
         if (fetchDatabaseManager != other.fetchDatabaseManager) return false
         if (backgroundHandler != other.backgroundHandler) return false
+        if (prioritySort != other.prioritySort) return false
+        if (internetCheckUrl != other.internetCheckUrl) return false
+        if (activeDownloadsCheckInterval != other.activeDownloadsCheckInterval) return false
+        if (createFileOnEnqueue != other.createFileOnEnqueue) return false
+        if (maxAutoRetryAttempts != other.maxAutoRetryAttempts) return false
+        if (preAllocateFileOnCreation != other.preAllocateFileOnCreation) return false
         return true
     }
 
@@ -348,20 +445,29 @@ class FetchConfiguration private constructor(val appContext: Context,
         if (backgroundHandler != null) {
             result = 31 * result + backgroundHandler.hashCode()
         }
+        result = 31 * result + prioritySort.hashCode()
+        if (internetCheckUrl != null) {
+            result = 31 * result + internetCheckUrl.hashCode()
+        }
+        result = 31 * result + activeDownloadsCheckInterval.hashCode()
+        result = 31 * result + createFileOnEnqueue.hashCode()
+        result = 31 * result + maxAutoRetryAttempts.hashCode()
+        result = 31 * result + preAllocateFileOnCreation.hashCode()
         return result
     }
 
     override fun toString(): String {
-        return "FetchConfiguration(appContext=$appContext, namespace='$namespace'," +
-                " concurrentLimit=$concurrentLimit, progressReportingIntervalMillis=$progressReportingIntervalMillis, " +
-                "loggingEnabled=$loggingEnabled, httpDownloader=$httpDownloader, " +
-                "globalNetworkType=$globalNetworkType, logger=$logger, " +
-                "autoStart=$autoStart, retryOnNetworkGain=$retryOnNetworkGain, " +
+        return "FetchConfiguration(appContext=$appContext, namespace='$namespace', " +
+                "concurrentLimit=$concurrentLimit, progressReportingIntervalMillis=$progressReportingIntervalMillis, " +
+                "loggingEnabled=$loggingEnabled, httpDownloader=$httpDownloader, globalNetworkType=$globalNetworkType," +
+                " logger=$logger, autoStart=$autoStart, retryOnNetworkGain=$retryOnNetworkGain, " +
                 "fileServerDownloader=$fileServerDownloader, hashCheckingEnabled=$hashCheckingEnabled, " +
                 "fileExistChecksEnabled=$fileExistChecksEnabled, storageResolver=$storageResolver, " +
-                "fetchNotificationManager=$fetchNotificationManager, " +
-                "fetchDatabaseManager=$fetchDatabaseManager, " +
-                "backgroundHandler=$backgroundHandler)"
+                "fetchNotificationManager=$fetchNotificationManager, fetchDatabaseManager=$fetchDatabaseManager," +
+                " backgroundHandler=$backgroundHandler, prioritySort=$prioritySort, internetCheckUrl=$internetCheckUrl," +
+                " activeDownloadsCheckInterval=$activeDownloadsCheckInterval, createFileOnEnqueue=$createFileOnEnqueue," +
+                " preAllocateFileOnCreation=$preAllocateFileOnCreation, " +
+                "maxAutoRetryAttempts=$maxAutoRetryAttempts)"
     }
 
 }

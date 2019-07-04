@@ -8,6 +8,7 @@ import com.tonyodev.fetch2.database.FetchDatabaseManager;
 import com.tonyodev.fetch2.database.FetchDatabaseManagerImpl;
 import com.tonyodev.fetch2.database.DownloadDatabase;
 import com.tonyodev.fetch2.database.DownloadInfo;
+import com.tonyodev.fetch2.database.FetchDatabaseManagerWrapper;
 import com.tonyodev.fetch2.database.migration.Migration;
 import com.tonyodev.fetch2.fetch.LiveSettings;
 import com.tonyodev.fetch2.provider.DownloadProvider;
@@ -46,9 +47,10 @@ public class DownloadProviderInstrumentedTest {
         FetchLogger fetchLogger = new FetchLogger(true, namespace);
         final LiveSettings liveSettings = new LiveSettings(namespace);
         DefaultStorageResolver defaultStorageResolver = new DefaultStorageResolver(appContext, FetchCoreUtils.getFileTempDir(appContext));
-        fetchDatabaseManager = new FetchDatabaseManagerImpl(appContext, namespace, migrations, liveSettings,
+        fetchDatabaseManager = new FetchDatabaseManagerImpl(appContext, namespace, fetchLogger, migrations, liveSettings,
                 false, defaultStorageResolver);
-        downloadProvider = new DownloadProvider(fetchDatabaseManager);
+        final FetchDatabaseManagerWrapper databaseManagerWrapper = new FetchDatabaseManagerWrapper(fetchDatabaseManager);
+        downloadProvider = new DownloadProvider(databaseManagerWrapper);
     }
 
     @After

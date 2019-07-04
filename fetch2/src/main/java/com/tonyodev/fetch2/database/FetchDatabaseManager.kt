@@ -1,14 +1,15 @@
 package com.tonyodev.fetch2.database
 
+import com.tonyodev.fetch2.PrioritySort
 import com.tonyodev.fetch2.Status
 import com.tonyodev.fetch2core.Extras
+import com.tonyodev.fetch2core.Logger
 import java.io.Closeable
 
 /**
  * This interface can be implemented by a class to create a custom FetchDatabaseManager.
  * The default Fetch Database Manager is FetchDatabaseManagerImpl which uses sqlite/room
  * to store download information. All methods and fields will be called on Fetch's background thread.
- * Note: Fetch expects all the methods and fields on this interface to be synchronized when implemented.
  * */
 interface FetchDatabaseManager : Closeable {
 
@@ -16,13 +17,16 @@ interface FetchDatabaseManager : Closeable {
      * Checks if the database is closed.
      * */
     val isClosed: Boolean
-
+    /**
+     * Logger to be used
+     * */
+    val logger: Logger
     /**
      * Delegate used by Fetch to delete temporary files used to assist the parallel downloader.
      * This field is set by the Fetch Builder directly. Your implemention should set this to null
      * by default.
      * */
-    var delegate: FetchDatabaseManager.Delegate?
+    var delegate: Delegate?
 
     /**
      * Inserts a new download into the database.
@@ -82,7 +86,7 @@ interface FetchDatabaseManager : Closeable {
 
     /**
      * Gets a download from the database by id if it exists.
-     * @param the download id.
+     * @param id download id.
      * @return the download or null.
      * */
     fun get(id: Int): DownloadInfo?
@@ -110,6 +114,13 @@ interface FetchDatabaseManager : Closeable {
     fun getByStatus(status: Status): List<DownloadInfo>
 
     /**
+     * Get all downloads by the specified statuses.
+     * @param statuses the query statuses list.
+     * @return all downloads in the database with the specified statuses.
+     * */
+    fun getByStatus(statuses: List<Status>): List<DownloadInfo>
+
+    /**
      * Gets all downloads that belongs to the specified group.
      * @param group the group id
      * @return list of downloads belonging to the group
@@ -133,9 +144,10 @@ interface FetchDatabaseManager : Closeable {
 
     /**
      * Get a list of downloads that are pending(status = Queued) for download in sorted order by(priority(DESC), created(ASC)
+     * @param prioritySort the sort priority for created. Default is ASC
      * @return list of pending downloads in sorted order.
      * */
-    fun getPendingDownloadsSorted(): List<DownloadInfo>
+    fun getPendingDownloadsSorted(prioritySort: PrioritySort): List<DownloadInfo>
 
     /**
      * Called when the first instance of Fetch for a namespace is created. Use this method

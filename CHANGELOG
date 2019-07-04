@@ -1,3 +1,85 @@
+Version 3.0.9/ Androidx version 3.1.3
+1. Improvements to getting content length.
+
+Version 3.0.8/  Android x version 3.1.2
+1. Fixed group error reporting bugs with FetchGroup.getProgress() method.
+2. Fixed network on main thread error.
+3. Improved network connection checks.
+4. Improvements and fixes to the StorageResolver when working with the Storage Access Framework.
+5. Files are now pre allocated on local storage on request enqueue. This prevents waste of data. See FetchConfiguration method `fun preAllocateFileOnCreation(preAllocateFile: Boolean)` to enable or disable this feature. On by default.
+6. Added new field segment to Downloader.Request. See java docs for details.
+7. Added new Fetch method `fun getContentLengthForRequests(requests:List<Request>, fromServer: Boolean, func: Func<List<Pair<Request,Long>>>, func2: Func<List<Pair<Request, Error>>>): Fetch`
+8. Performance improvements to the Parallel downloader mode.
+
+
+Version 3.0.7/ Android x version 3.1.1
+Added new pauseAll method on Fetch.
+Added new resumeAll method on Fetch.
+Better logging.
+Library code cleanup.
+Special thanks to Alex Starchenko for submitting the fixes and improvements
+
+Version 3.0.6
+Identical to the androidx version 3.1.0
+
+Version 3.0.5
+This release only adds a new Feature that allows Fetch to auto retry failed downloads for any reason. Set the number of times Fetch will auto retry a download when it fails.
+This feature if off by default.
+1. New fields added on Download: autoRetryMaxAttempts and autoRetryAttempts. See Java docs.
+2. New field added on RequestInfo: autoRetryMaxAttempts. See Java docs.
+3. New method added on Fetch: fun resetAutoRetryAttempts(downloadId: Int, retryDownload: Boolean = true, func: Func2<Download?>? = null, func2: Func<Error>? = null): Fetch
+4. New method added on RXFetch: fun resetAutoRetryAttempts(downloadId: Int, retryDownload: Boolean = true): Convertible<Download?>
+5. New method added on FetchConfiguration: fun setAutoRetryMaxAttempts(autoRetryMaxAttempts: Int): Builder. See Java Docs
+
+```java
+        final FetchConfiguration fetchConfiguration = new FetchConfiguration.Builder(this)
+                .enableRetryOnNetworkGain(true)
+                .setDownloadConcurrentLimit(2)
+                .setAutoRetryMaxAttempts(10) // set global auto retry max attempts for all downloads.
+                .build();
+        final Fetch fetch = Fetch.Impl.getInstance(fetchConfiguration);
+
+        //OR
+
+        final String url = "dummy url";
+        final String file = "dummy file";
+        final Request request = new Request(url, file);
+        request.setAutoRetryMaxAttempts(5); // set auto retry on individual downloads.
+
+        fetch.getDownload(request.getId(), download -> {
+            if (download != null) {
+                download.getAutoRetryAttempts(); //get the number of auto retry attempts.
+                download.getAutoRetryMaxAttempts(); //get the number of max attempts.
+            }
+        });
+
+        //reset the auto retry attempts for a download
+        fetch.resetAutoRetryAttempts(request.getId(), true, null, null);
+```
+
+Version 3.0.4
+1. updated documentation
+2. remove has activeDownloads(): Boolean method. Use fun hasActiveDownloads(includeAddedDownloads: Boolean, func: Func<Boolean>): Fetch or fun addActiveDownloadsObserver(includeAddedDownloads: Boolean = false, fetchObserver: FetchObserver<Boolean>): Fetch instead.
+3. Added new methods on Fetch addActiveDownloadsObserver(includeAddedDownloads: Boolean = false, fetchObserver: FetchObserver<Boolean>): Fetch and removeActiveDownloadsObserver(fetchObserver: FetchObserver<Boolean>): Fetch
+4. Added new method on FetchConfiguration fun setHasActiveDownloadsCheckInterval(intervalInMillis: Long): Builder
+5. Added new REPORTING option on Reason enum
+6. Added new method on FetchConfiguration fun createDownloadFileOnEnqueue(create: Boolean): Builder
+7. Fix for starting download immediately whiles enqueuing
+
+Version 3.0.3
+- Bug fixes for hasActiveDownloads method.
+- Download url redirection fixes and improvements
+- Added internet check method to FetchConfiguration called setInternetAccessUrlCheck(url: String?): Builder
+  See documentation on usage.
+- Added new fields redirected and redirectedUrl on Downloader.ServerRequest class.
+
+Version 3.0.2
+- Added Wrapper class around FetchDatabase to provide safer access
+- Added Priority Sort to change the way Fetch queues downloads based on time created.
+
+Note: Fetch 3.1.0 Will be the next big release. The library will be migrating to AndroidX packages.
+Point releases will be created for the none AndroidX version of the library.
+
 Version 3.0.1
 - Added new method hasActiveDownloads(includeAddedDownloads: Boolean, func: Func<Boolean>)
 

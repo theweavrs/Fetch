@@ -34,13 +34,6 @@ interface RxFetch {
      * */
     val fetchConfiguration: FetchConfiguration
 
-    /** Indicates if this fetch namespace has active(Queued or Downloading) downloads. You can use this value to
-     * keep a background service ongoing until this field returns false.
-     * This field can be accessed on non UI threads.
-     * @throws FetchException if accessed on ui thread
-     * */
-    val hasActiveDownloads: Boolean
-
     /**
      * Queues a request for downloading. If Fetch fails to enqueue the request,
      * func2 will be called with the error.
@@ -294,6 +287,15 @@ interface RxFetch {
      * */
     fun retry(id: Int): Convertible<Download>
 
+    /**
+     * Resets the autoRetryAttempts value for a download back to 0.
+     * @param downloadId Id of existing request/download
+     * @param retryDownload Retry the download if its status is Status.ERROR. True by default.
+     * @throws FetchException if this instance of Fetch has been closed.
+     * @return Convertible with the download that was successfully queued or null.
+     * */
+    fun resetAutoRetryAttempts(downloadId: Int, retryDownload: Boolean = true): Convertible<Download?>
+
     /** Updates an existing request.
      * @see com.tonyodev.fetch2.Request for more details.
      * @param requestId Id of existing request/download
@@ -488,7 +490,6 @@ interface RxFetch {
     /** Releases held resources and the namespace used by this Fetch instance.
      * Once closed this instance cannot be reused but the namespace can be reused
      * by a new instance of Fetch.
-     * @throws FetchException if this instance of Fetch has been closed.
      * */
     fun close()
 
@@ -512,6 +513,20 @@ interface RxFetch {
      * not able to get the content length.
      * */
     fun getContentLengthForRequest(request: Request, fromServer: Boolean): Convertible<Long>
+
+    /**
+     * Gets the content Length for each request in the passed in list. If the request or contentLength cannot be found in
+     * the Fetch database(meaning Fetch never processed the request and started downloading it) -1 is returned.
+     * However, setting fromServer to true will create a new connection to the server to get the connectLength
+     * if Fetch does not already contain the data in the database for the request.
+     * @param requests Request list. Can be a managed or un-managed list of requests. The requests are not stored in
+     * the fetch database.
+     * @param fromServer If true, fetch will attempt to get the ContentLength
+     * from the server directly by making a network request. Otherwise no action is taken.
+     * @throws FetchException if this instance of Fetch has been closed.
+     * @return convertible containing the success and error result list.
+     * */
+    fun getContentLengthForRequests(requests:List<Request>, fromServer: Boolean): Convertible<Pair<List<Pair<Request, Long>>, List<Pair<Request, Error>>>>
 
     /**
      * Gets the Server Response for the url and associated headers.
@@ -581,6 +596,22 @@ interface RxFetch {
      * @return Convertible with results.
      * */
     fun hasActiveDownloads(includeAddedDownloads: Boolean): Convertible<Boolean>
+
+    /** Subscribe a FetchObserver that indicates if this fetch namespace has active(Queued or Downloading) downloads. You can use this value to
+     * keep a background service ongoing until the value returned is false.
+     * @param includeAddedDownloads To include downloads with a status of Added. Added downloads are not considered active by default.
+     * @param fetchObserver the fetch observer
+     * @throws FetchException if this instance of Fetch has been closed.
+     * @return instance
+     * */
+    fun addActiveDownloadsObserver(includeAddedDownloads: Boolean = false, fetchObserver: FetchObserver<Boolean>): RxFetch
+
+    /** Removes a subscribed FetchObserver that is listening for active downloads.
+     * @param fetchObserver the fetch observer to remove.
+     * @throws FetchException if this instance of Fetch has been closed.
+     * @return instance
+     * */
+    fun removeActiveDownloadsObserver(fetchObserver: FetchObserver<Boolean>): RxFetch
 
     /**
      * RX Fetch implementation class. Use this Singleton to get instances of RxFetch or Fetch.

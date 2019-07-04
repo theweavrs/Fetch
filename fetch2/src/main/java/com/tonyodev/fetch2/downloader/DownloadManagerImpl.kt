@@ -28,7 +28,9 @@ class DownloadManagerImpl(private val httpDownloader: Downloader<*, *>,
                           private val storageResolver: StorageResolver,
                           private val context: Context,
                           private val namespace: String,
-                          private val groupInfoProvider: GroupInfoProvider) : DownloadManager {
+                          private val groupInfoProvider: GroupInfoProvider,
+                          private val globalAutoRetryMaxAttempts: Int,
+                          private val preAllocateFileOnCreation: Boolean) : DownloadManager {
 
     private val lock = Any()
     private var executor: ExecutorService? = getNewDownloadExecutorService(concurrentLimit)
@@ -103,7 +105,7 @@ class DownloadManagerImpl(private val httpDownloader: Downloader<*, *>,
                         removeDownloadMappings(download)
                         groupInfoProvider.clean()
                     } catch (e: Exception) {
-
+                        logger.e("DownloadManager failed to start download $download", e)
                     } finally {
                         removeDownloadMappings(download)
                         val intent = Intent(ACTION_QUEUE_BACKOFF_RESET)
@@ -266,7 +268,8 @@ class DownloadManagerImpl(private val httpDownloader: Downloader<*, *>,
                     networkInfoProvider = networkInfoProvider,
                     retryOnNetworkGain = retryOnNetworkGain,
                     hashCheckingEnabled = hashCheckingEnabled,
-                    storageResolver = storageResolver)
+                    storageResolver = storageResolver,
+                    preAllocateFileOnCreation = preAllocateFileOnCreation)
         } else {
             ParallelFileDownloaderImpl(
                     initialDownload = download,
@@ -277,7 +280,8 @@ class DownloadManagerImpl(private val httpDownloader: Downloader<*, *>,
                     retryOnNetworkGain = retryOnNetworkGain,
                     fileTempDir = storageResolver.getDirectoryForFileDownloaderTypeParallel(request),
                     hashCheckingEnabled = hashCheckingEnabled,
-                    storageResolver = storageResolver)
+                    storageResolver = storageResolver,
+                    preAllocateFileOnCreation = preAllocateFileOnCreation)
         }
     }
 
@@ -285,7 +289,8 @@ class DownloadManagerImpl(private val httpDownloader: Downloader<*, *>,
         return FileDownloaderDelegate(
                 downloadInfoUpdater = downloadInfoUpdater,
                 fetchListener = listenerCoordinator.mainListener,
-                retryOnNetworkGain = retryOnNetworkGain)
+                retryOnNetworkGain = retryOnNetworkGain,
+                globalAutoRetryMaxAttempts = globalAutoRetryMaxAttempts)
     }
 
     override fun getDownloadFileTempDir(download: Download): String {
